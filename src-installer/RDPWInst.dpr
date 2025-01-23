@@ -1132,6 +1132,8 @@ var
   INIPath, S: String;
   Str: TStringList;
   I, OldDate, NewDate: Integer;
+  UmRdpService_ServiceStopped: Boolean;
+  TermService_ServiceStopped: Boolean;
 begin
   INIPath := ExtractFilePath(ExpandPath(TermServicePath)) + 'rdpwrap.ini';
   if not CheckINIDate(INIPath, '', OldDate) then
