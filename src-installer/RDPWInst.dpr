@@ -472,6 +472,58 @@ begin
   Result := True;
 end;
 
+function StopService(const ServiceName: string): Boolean;
+var
+  SCMHandle, ServiceHandle: SC_HANDLE;
+  ServiceStatus: TServiceStatus;
+begin
+  Result := False;
+
+  // Open the service control manager
+  SCMHandle := OpenSCManager(nil, nil, SC_MANAGER_ALL_ACCESS);
+  if SCMHandle = 0 then
+  begin
+    Writeln('Failed to open Service Control Manager.');
+    Exit;
+  end;
+
+  try
+    // Open the specified service
+    ServiceHandle := OpenService(SCMHandle, PChar(ServiceName), SERVICE_STOP or SERVICE_QUERY_STATUS);
+    if ServiceHandle = 0 then
+    begin
+      Writeln('Failed to open the service: ', ServiceName);
+      Exit;
+    end;
+
+    try
+      // Send stop command
+      if ControlService(ServiceHandle, SERVICE_CONTROL_STOP, ServiceStatus) then
+      begin
+        // Check if the service is stopped
+        while QueryServiceStatus(ServiceHandle, ServiceStatus) do
+        begin
+          if ServiceStatus.dwCurrentState = SERVICE_STOPPED then
+          begin
+            Result := True;
+            Break;
+          end;
+          // Wait for the service to stop
+          Sleep(100);
+        end;
+      end
+      else
+      begin
+        Writeln('Failed to send stop command to the service: ', ServiceName);
+      end;
+    finally
+      CloseServiceHandle(ServiceHandle);
+    end;
+  finally
+    CloseServiceHandle(SCMHandle);
+  end;
+end;
+
 procedure KillProcess(PID: DWORD);
 var
   hProc: THandle;
@@ -1106,7 +1158,22 @@ begin
 
       Writeln('[*] Terminating service...');
       AddPrivilege('SeDebugPrivilege');
-      ExecWait('cmd /c net stop termService /y');
+      
+      UmRdpService_ServiceStopped := StopService('UmRdpService');
+      TermService_ServiceStopped := StopService('TermService');
+
+      if TermService_ServiceStopped and UmRdpService_ServiceStopped then
+      begin
+        Writeln('[+] UmRdpService stopped successfully.');
+        Writeln('[+] TermService stopped successfully.');
+      end
+      else
+      begin
+      if not UmRdpService_ServiceStopped then
+        Writeln('[-] Failed to stop UmRdpService.');
+      if not TermService_ServiceStopped then
+        Writeln('[-] Failed to stop TermService.');
+      end;
 
       if Length(ShareSvc) > 0 then
         for I := 0 to Length(ShareSvc) - 1 do
